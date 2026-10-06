@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Web 全音域電子琴 (協作平台版)</title>
+  <style>
+    :root {
+      --bg-color: #10121A;
+      --panel-bg: #181B26;
+      --accent-color: #00E5FF;
+      --accent-pink: #FF0055;
+      --text-color: #E2E8F0;
+      --key-white: #FFFFFF;
+      --key-black: #1E2022;
+    }
+
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      user-select: none; 
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    }
+
+    /* 鋪滿協作平台容器 */
+    .synth-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel-bg);
+      padding: 12px 16px;
+      overflow-y: auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+
+    .title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent-color);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-badge {
+      font-size: 0.78rem;
+      padding: 5px 10px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px; 
+      height: 8px;
+      border-radius: 50%;
+      background-color: #FFB300;
+      transition: background-color 0.3s;
+    }
+
+    .status-dot.connected {
+      background-color: #00FF66;
+      box-shadow: 0 0 8px #00FF66;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      margin-bottom: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .control-group label {
+      font-size: 0.7rem;
+      color: #8A99AD;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+      background: #0F1017;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-color);
+      padding: 5px 8px;
+      border-radius: 6px;
+      outline: none;
+      font-size: 0.8rem;
+    }
+
+    select:focus { border-color: var(--accent-color); }
+
+    .display-panel {
+      text-align: center;
+      background: #0D0E15;
+      padding: 8px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      display: flex;
+      justify-content: space-around;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      flex-shrink: 0;
+    }
+
+    .display-panel span { color: var(--accent-color); font-weight: bold; }
+
+    /* 琴鍵滾動區塊 */
+    .keyboard-wrapper {
+      flex: 1;
+      min-height: 180px;
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-radius: 8px;
+      background: #0A0B10;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent-color) #181B26;
+      display: flex;
+      align-items: stretch;
+      padding: 10px;
+    }
+
+    .keyboard-wrapper::-webkit-scrollbar { height: 8px; }
+    .keyboard-wrapper::-webkit-scrollbar-thumb {
+      background: var(--accent-color);
+      border-radius: 4px;
+    }
+
+    .piano {
+      display: inline-flex;
+      position: relative;
+      height: 100%;
+      min-height: 150px;
+      margin: 0 auto;
+      padding: 0 10px;
+    }
+
+    .key {
+      position: relative;
+      cursor: pointer;
+      border-radius: 0 0 5px 5px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding-bottom: 8px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      touch-action: none;
+    }
+
+    .key .key-label { font-size: 0.65rem; opacity: 0.75; }
+    .key .note-label { font-size: 0.6rem; margin-top: 2px; opacity: 0.55; }
+
+    .key.white {
+      width: 38px;
+      height: 100%;
+      background: var(--key-white);
+      color: #222;
+      border: 1px solid #AAA;
+      z-index: 1;
+    }
+
+    .key.white.active {
+      background: var(--accent-color) !important;
+      color: #000;
+      transform: translateY(2px);
+      box-shadow: 0 0 12px var(--accent-color);
+    }
+
+    .key.black {
+      width: 24px;
+      height: 60%;
+      background: var(--key-black);
+      color: #CCC;
+      margin-left: -12px;
+      margin-right: -12px;
+      z-index: 2;
+      border-radius: 0 0 4px 4px;
+    }
+
+    .key.black.active {
+      background: var(--accent-pink) !important;
+      color: #FFF;
+      transform: translateY(2px);
+      box-shadow: 0 0 12px var(--accent-pink);
+    }
+
+    .start-btn {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, var(--accent-color), #0088FF);
+      border: none;
+      border-radius: 6px;
+      color: #000;
+      font-weight: bold;
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+
+    .hints {
+      font-size: 0.72rem;
+      color: #7A899B;
+      margin-top: 6px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="synth-container">
+    <button id="start-btn" class="start-btn">🎵 點擊啟動聲音與 MIDI 連線</button>
+
+    <div class="header">
+      <div class="title">⌨️ Web 全音域電子琴</div>
+      <div class="status-badge">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text">點擊上方按鈕啟用 MIDI / 音訊</span>
+      </div>
+    </div>
+
+    <!-- 控制區 -->
+    <div class="controls-grid">
+      <div class="control-group">
+        <label for="midi-select">🎹 連接 MIDI 裝置</label>
+        <select id="midi-select">
+          <option value="">-- 尚未搜尋裝置 --</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="key-range">琴鍵顯示數量</label>
+        <select id="key-range">
+          <option value="25">25 鍵 (C4 - C6)</option>
+          <option value="37" selected>37 鍵 (F3 - F6)</option>
+          <option value="49">49 鍵 (C3 - C7)</option>
+          <option value="61">61 鍵 (C2 - C7)</option>
+          <option value="88">88 鍵 (A0 - C8 全音域)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="waveform">音色波形</label>
+        <select id="waveform">
+          <option value="sine">正弦波 (Sine)</option>
+          <option value="square">方波 (Square)</option>
+          <option value="sawtooth" selected>鋸齒波 (Sawtooth)</option>
+          <option value="triangle">三角波 (Triangle)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="volume">主音量</label>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.5">
+      </div>
+
+      <div class="control-group">
+        <label for="octave">電腦鍵盤移調</label>
+        <select id="octave">
+          <option value="-12">-1 八度</option>
+          <option value="0" selected>標準八度</option>
+          <option value="12">+1 八度</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 狀態顯示 -->
+    <div class="display-panel">
+      <div>音符：<span id="display-note">--</span></div>
+      <div>MIDI 碼：<span id="display-number">--</span></div>
+      <div>訊號來源：<span id="display-source">--</span></div>
+    </div>
+
+    <!-- 鋼琴鍵盤區域 -->
+    <div class="keyboard-wrapper">
+      <div class="piano" id="piano"></div>
+    </div>
+
+    <div class="hints">
+      💡 電腦鍵盤按鍵：<b>[下排] Z X C V B N M</b> (黑鍵 S D G H J) | <b>[上排] Q W E R T Y U</b> (黑鍵 2 3 5 6 7)
+    </div>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    let activeOscillators = {};
+    let midiAccess = null;
+    let selectedMidiId = 'ALL';
+
+    const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+    const keyToMidi = {
+      'z': 48, 's': 49, 'x': 50, 'd': 51, 'c': 52, 'v': 53,
+      'g': 54, 'b': 55, 'h': 56, 'n': 57, 'j': 58, 'm': 59,
+      'q': 60, '2': 61, 'w': 62, '3': 63, 'e': 64, 'r': 65,
+      '5': 66, 't': 67, '6': 68, 'y': 69, '7': 70, 'u': 71, 'i': 72
+    };
+
+    const startBtn = document.getElementById('start-btn');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const displayNote = document.getElementById('display-note');
+    const displayNumber = document.getElementById('display-number');
+    const displaySource = document.getElementById('display-source');
+    const midiSelect = document.getElementById('midi-select');
+    const keyRangeSelect = document.getElementById('key-range');
+    const waveformSelect = document.getElementById('waveform');
+    const volumeSlider = document.getElementById('volume');
+    const octaveSelect = document.getElementById('octave');
+    const pianoContainer = document.getElementById('piano');
+
+    function midiToFrequency(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      startBtn.style.display = 'none';
+    }
+
+    startBtn.addEventListener('click', () => {
+      initAudio();
+      tryInitMIDI();
+    });
+
+    function noteOn(midiNote, source = '') {
+      if (!audioCtx) initAudio();
+
+      const freq = midiToFrequency(midiNote);
+      if (activeOscillators[midiNote]) noteOff(midiNote);
+
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      osc.type = waveformSelect.value;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+      const vol = parseFloat(volumeSlider.value);
+      gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(Math.max(vol, 0.001), audioCtx.currentTime + 0.02);
+
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      osc.start();
+
+      activeOscillators[midiNote] = { osc, gainNode };
+
+      const noteName = noteNames[midiNote % 12] + (Math.floor(midiNote / 12) - 1);
+      displayNote.textContent = noteName;
+      displayNumber.textContent = midiNote;
+      displaySource.textContent = source || 'MIDI/Touch';
+
+      const keyEl = document.querySelector(`[data-midi="${midiNote}"]`);
+      if (keyEl) {
+        keyEl.classList.add('active');
+        keyEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+
+    function noteOff(midiNote) {
+      if (activeOscillators[midiNote]) {
+        const { osc, gainNode } = activeOscillators[midiNote];
+        gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.08);
+        setTimeout(() => { osc.stop(); osc.disconnect(); }, 90);
+        delete activeOscillators[midiNote];
+      }
+
+      const keyEl = document.querySelector(`[data-midi="${midiNote}"]`);
+      if (keyEl) keyEl.classList.remove('active');
+    }
+
+    // 鍵盤監聽
+    const pressedKeys = new Set();
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const key = e.key.toLowerCase();
+      if (keyToMidi[key] !== undefined && !pressedKeys.has(key)) {
+        pressedKeys.add(key);
+        const midiWithOctave = keyToMidi[key] + parseInt(octaveSelect.value);
+        noteOn(midiWithOctave, `鍵盤 [${key.toUpperCase()}]`);
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (keyToMidi[key] !== undefined) {
+        pressedKeys.delete(key);
+        const midiWithOctave = keyToMidi[key] + parseInt(octaveSelect.value);
+        noteOff(midiWithOctave);
+      }
+    });
+
+    // 啟動 MIDI 連線 (加入 iframe 權限偵測)
+    async function tryInitMIDI() {
+      if (!navigator.requestMIDIAccess) {
+        statusText.textContent = "瀏覽器不支援 Web MIDI API";
+        return;
+      }
+
+      try {
+        // 先嘗試標準無 sysex 請求，降低權限阻擋機率
+        midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+        updateMidiDeviceList();
+        midiAccess.onstatechange = () => updateMidiDeviceList();
+      } catch (err) {
+        if (err.name === 'SecurityError') {
+          statusText.textContent = "MIDI 權限遭 iframe 限制 (請加上 allow='midi')";
+        } else {
+          statusText.textContent = "MIDI 連線失敗：" + err.message;
+        }
+        midiSelect.innerHTML = '<option value="">MIDI 存取受限</option>';
+      }
+    }
+
+    function updateMidiDeviceList() {
+      if (!midiAccess) return;
+
+      midiSelect.innerHTML = '';
+      const inputs = Array.from(midiAccess.inputs.values());
+
+      if (inputs.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = "";
+        opt.textContent = "未偵測到 MIDI 裝置";
+        midiSelect.appendChild(opt);
+        
+        statusDot.classList.remove('connected');
+        statusText.textContent = "請連線 USB MIDI 電子琴";
+        bindMidiListeners();
+        return;
+      }
+
+      const allOpt = document.createElement('option');
+      allOpt.value = "ALL";
+      allOpt.textContent = `所有已連接裝置 (${inputs.length} 台)`;
+      midiSelect.appendChild(allOpt);
+
+      inputs.forEach(input => {
+        const opt = document.createElement('option');
+        opt.value = input.id;
+        opt.textContent = input.name || `MIDI 裝置 (${input.id})`;
+        midiSelect.appendChild(opt);
+      });
+
+      if (inputs.some(i => i.id === selectedMidiId)) {
+        midiSelect.value = selectedMidiId;
+      } else {
+        selectedMidiId = 'ALL';
+        midiSelect.value = 'ALL';
+      }
+
+      bindMidiListeners();
+    }
+
+    function bindMidiListeners() {
+      if (!midiAccess) return;
+
+      const inputs = midiAccess.inputs.values();
+      let activeCount = 0;
+
+      for (let input of inputs) {
+        if (selectedMidiId === 'ALL' || input.id === selectedMidiId) {
+          input.onmidimessage = handleMIDIMessage;
+          activeCount++;
+        } else {
+          input.onmidimessage = null;
+        }
+      }
+
+      if (activeCount > 0) {
+        statusDot.classList.add('connected');
+        statusText.textContent = `MIDI 已就緒 (${activeCount} 台裝置)`;
+      }
+    }
+
+    function handleMIDIMessage(e) {
+      const [status, note, velocity] = e.data;
+      const command = status >> 4;
+      const deviceName = e.target ? e.target.name : 'USB MIDI';
+
+      if (command === 9 && velocity > 0) {
+        noteOn(note, deviceName);
+      } else if (command === 8 || (command === 9 && velocity === 0)) {
+        noteOff(note);
+      }
+    }
+
+    midiSelect.addEventListener('change', (e) => {
+      selectedMidiId = e.target.value;
+      bindMidiListeners();
+    });
+
+    function renderKeyboard() {
+      pianoContainer.innerHTML = '';
+      const range = keyRangeSelect.value;
+      let startMidi = 60, endMidi = 84;
+
+      if (range === '25') { startMidi = 60; endMidi = 84; }
+      else if (range === '37') { startMidi = 53; endMidi = 89; }
+      else if (range === '49') { startMidi = 48; endMidi = 96; }
+      else if (range === '61') { startMidi = 36; endMidi = 96; }
+      else if (range === '88') { startMidi = 21; endMidi = 108; }
+
+      const midiToKeyLabel = {};
+      const currentOctShift = parseInt(octaveSelect.value);
+      for (let k in keyToMidi) {
+        midiToKeyLabel[keyToMidi[k] + currentOctShift] = k.toUpperCase();
+      }
+
+      for (let i = startMidi; i <= endMidi; i++) {
+        const isBlack = [1, 3, 6, 8, 10].includes(i % 12);
+        const key = document.createElement('div');
+        key.className = `key ${isBlack ? 'black' : 'white'}`;
+        key.dataset.midi = i;
+
+        const keyLabel = midiToKeyLabel[i] ? `<div class="key-label">${midiToKeyLabel[i]}</div>` : '';
+        const noteLabel = `<div class="note-label">${noteNames[i % 12]}</div>`;
+        key.innerHTML = `${keyLabel}${noteLabel}`;
+
+        // 滑鼠與觸控事件
+        key.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          noteOn(i, 'Click/Touch');
+        });
+        key.addEventListener('pointerup', (e) => {
+          e.preventDefault();
+          noteOff(i);
+        });
+        key.addEventListener('pointerleave', (e) => {
+          e.preventDefault();
+          noteOff(i);
+        });
+
+        pianoContainer.appendChild(key);
+      }
+    }
+
+    keyRangeSelect.addEventListener('change', renderKeyboard);
+    octaveSelect.addEventListener('change', renderKeyboard);
+
+    renderKeyboard();
+  </script>
+</body>
+</html>
